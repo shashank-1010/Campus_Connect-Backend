@@ -4,10 +4,10 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import connectDB from './config/db';
-import { testSupabaseConnection } from './config/supabase'; // ✅ ADD THIS
+import { testSupabaseConnection } from './config/supabase';
 import authRoutes from './routes/authRoutes';
 console.log('🔍 authRoutes stack length:', authRoutes.stack?.length);
-import marketplaceRoutes from './routes/marketplaceRoutes'; // ✅ Updated
+import marketplaceRoutes from './routes/marketplaceRoutes';
 import notesRoutes from './routes/notesRoutes';
 import rideRoutes from './routes/rideRoutes';
 import studyGroupRoutes from './routes/studyGroupRoutes';
@@ -22,7 +22,7 @@ import complaintRoutes from './routes/complaintRoutes';
 import skillRoutes from './routes/skillRoutes';
 
 // Load env from server folder
-dotenv.config({ path: path.join(__dirname, '.env') }); // ✅ CHANGE: ab server folder mein .env
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
@@ -30,7 +30,7 @@ const app = express();
 connectDB();
 
 // Test Supabase connection
-testSupabaseConnection(); // ✅ ADD THIS
+testSupabaseConnection();
 
 // Create uploads directory (local backup)
 const uploadsDir = path.resolve(__dirname, '../uploads');
@@ -44,7 +44,6 @@ try {
     console.log('✅ Uploads directory already exists');
   }
   
-  // Test write permission
   const testFile = path.join(uploadsDir, 'test.txt');
   fs.writeFileSync(testFile, 'test');
   fs.unlinkSync(testFile);
@@ -54,10 +53,17 @@ try {
   console.error('❌ Error with uploads directory:', error);
 }
 
-// Middleware
+// ========== ✅ CORS FIX – FRONTEND DOMAINS ALLOW ==========
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
+  origin: [
+    'https://frontend-knha.onrender.com',
+    'https://faahhh.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json({ limit: '50mb' }));
@@ -79,7 +85,7 @@ app.use('/api/complaints', complaintRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/lost-items', lostItemRoutes);
-app.use('/api/marketplace', marketplaceRoutes); // ✅ Updated marketplace routes
+app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/studygroups', studyGroupRoutes);
@@ -91,7 +97,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/upload', uploadRoutes);
 console.log('✅ Routes registered');
 
-// ✅ ROOT ROUTE - Yeh hona chahiye
+// ROOT ROUTE
 app.get('/', (req, res) => {
   res.json({ 
     message: '🚀 Campus Connect API Server',
