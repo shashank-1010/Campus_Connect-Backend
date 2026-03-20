@@ -5,13 +5,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
+const helmet_1 = __importDefault(require("helmet"));
+const compression_1 = __importDefault(require("compression"));
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const db_1 = __importDefault(require("./config/db"));
 const supabase_1 = require("./config/supabase");
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
-console.log('🔍 authRoutes stack length:', authRoutes_1.default.stack?.length);
 const marketplaceRoutes_1 = __importDefault(require("./routes/marketplaceRoutes"));
 const notesRoutes_1 = __importDefault(require("./routes/notesRoutes"));
 const rideRoutes_1 = __importDefault(require("./routes/rideRoutes"));
@@ -28,30 +30,31 @@ const skillRoutes_1 = __importDefault(require("./routes/skillRoutes"));
 // Load env from server folder
 dotenv_1.default.config({ path: path_1.default.join(__dirname, '.env') });
 const app = (0, express_1.default)();
-// Connect to database
-(0, db_1.default)();
-// Test Supabase connection
-(0, supabase_1.testSupabaseConnection)();
-// Create uploads directory (local backup)
-const uploadsDir = path_1.default.resolve(__dirname, '../uploads');
-console.log('📁 Uploads directory path:', uploadsDir);
-try {
-    if (!fs_1.default.existsSync(uploadsDir)) {
-        fs_1.default.mkdirSync(uploadsDir, { recursive: true });
-        console.log('✅ Uploads directory created successfully');
-    }
-    else {
-        console.log('✅ Uploads directory already exists');
-    }
-    const testFile = path_1.default.join(uploadsDir, 'test.txt');
-    fs_1.default.writeFileSync(testFile, 'test');
-    fs_1.default.unlinkSync(testFile);
-    console.log('✅ Uploads directory is writable');
-}
-catch (error) {
-    console.error('❌ Error with uploads directory:', error);
-}
-// ========== ✅ CORS FIX – FRONTEND DOMAINS ALLOW ==========
+const isProduction = process.env.NODE_ENV === 'production';
+// ========== SECURITY MIDDLEWARE ==========
+// Helmet - Security headers
+app.use((0, helmet_1.default)({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+        },
+    },
+}));
+// Compression - Response compression
+app.use((0, compression_1.default)());
+// Rate limiting - Prevent DDoS
+const limiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api', limiter);
+// CORS - Restrict origins
 app.use((0, cors_1.default)({
     origin: [
         'https://campusconnectup.onrender.com',
@@ -64,17 +67,57 @@ app.use((0, cors_1.default)({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express_1.default.json({ limit: '50mb' }));
-app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
-// Serve static files (for local uploads backup)
-app.use('/uploads', express_1.default.static(uploadsDir));
-// Log all requests for debugging
-app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
-    next();
-});
-// API Routes
-console.log('📝 Registering routes...');
+// Body parser with size limit
+app.use(express_1.default.json({ limit: '10mb' })); // Reduced from 50mb
+app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
+// ========== DATABASE CONNECTION ==========
+(0, db_1.default)();
+(0, supabase_1.testSupabaseConnection)();
+// ========== UPLOADS DIRECTORY ==========
+const uploadsDir = path_1.default.resolve(__dirname, '../uploads');
+// Only log in development
+if (!isProduction) {
+    console.log('📁 Uploads directory path:', uploadsDir);
+}
+try {
+    if (!fs_1.default.existsSync(uploadsDir)) {
+        fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+        if (!isProduction)
+            console.log('✅ Uploads directory created successfully');
+    }
+    const testFile = path_1.default.join(uploadsDir, 'test.txt');
+    fs_1.default.writeFileSync(testFile, 'test');
+    fs_1.default.unlinkSync(testFile);
+    if (!isProduction)
+        console.log('✅ Uploads directory is writable');
+}
+catch (error) {
+    if (!isProduction)
+        console.error('❌ Error with uploads directory:', error);
+}
+// Serve static files (protected)
+app.use('/uploads', express_1.default.static(uploadsDir, {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true,
+}));
+// ========== REQUEST LOGGING (PRODUCTION SAFE) ==========
+if (!isProduction) {
+    app.use((req, res, next) => {
+        console.log(`${req.method} ${req.url}`);
+        next();
+    });
+}
+else {
+    // Production: Only log errors
+    app.use((err, req, res, next) => {
+        console.error(`❌ Error: ${err.message}`);
+        next(err);
+    });
+}
+// ========== API ROUTES ==========
+if (!isProduction)
+    console.log('📝 Registering routes...');
 app.use('/api/complaints', complaintRoutes_1.default);
 app.use('/api/chat', chatRoutes_1.default);
 app.use('/api/auth', authRoutes_1.default);
@@ -89,64 +132,80 @@ app.use('/api/skills', skillRoutes_1.default);
 app.use('/api/admin', adminRoutes_1.default);
 app.use('/api/profile', profileRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
-console.log('✅ Routes registered');
-// ROOT ROUTE
+if (!isProduction)
+    console.log('✅ Routes registered');
+// ========== PUBLIC ROUTES ==========
+// Root route
 app.get('/', (req, res) => {
     res.json({
         message: '🚀 Campus Connect API Server',
         status: 'running',
-        port: process.env.PORT || 10000
+        version: '1.0.0'
     });
 });
-// Test route to list all registered routes
-app.get('/api/routes', (req, res) => {
-    const routes = [
-        '/api/auth',
-        '/api/marketplace',
-        '/api/notes',
-        '/api/rides',
-        '/api/studygroups',
-        '/api/activities',
-        '/api/polls',
-        '/api/admin',
-        '/api/profile',
-        '/api/upload'
-    ];
-    res.json({
-        message: 'Available routes',
-        routes: routes,
-        uploadRouteExists: true,
-        supabase: 'Connected'
+// Routes list (only in development)
+if (!isProduction) {
+    app.get('/api/routes', (req, res) => {
+        const routes = [
+            '/api/auth',
+            '/api/marketplace',
+            '/api/notes',
+            '/api/rides',
+            '/api/studygroups',
+            '/api/activities',
+            '/api/polls',
+            '/api/admin',
+            '/api/profile',
+            '/api/upload'
+        ];
+        res.json({
+            message: 'Available routes',
+            routes: routes
+        });
     });
-});
-// Test route
-app.get('/api/test', (req, res) => {
-    res.json({
-        message: 'Server is working',
-        uploadsDir: uploadsDir,
-        exists: fs_1.default.existsSync(uploadsDir),
-        supabase: 'Configured'
+}
+else {
+    // Production: Hide routes list
+    app.get('/api/routes', (req, res) => {
+        res.status(404).json({ message: 'Not found' });
     });
-});
-// Health check route
+}
+// Health check (public)
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
-        message: 'Server is running',
         timestamp: new Date().toISOString()
     });
 });
+// Test route (only development)
+if (!isProduction) {
+    app.get('/api/test', (req, res) => {
+        res.json({
+            message: 'Server is working',
+            supabase: 'Configured'
+        });
+    });
+}
+// ========== ERROR HANDLING ==========
 // 404 handler
 app.use('*', (req, res) => {
-    console.log('❌ 404 Not Found:', req.originalUrl);
-    res.status(404).json({ message: `Route ${req.originalUrl} not found` });
+    if (!isProduction)
+        console.log('❌ 404 Not Found:', req.originalUrl);
+    res.status(404).json({ message: 'Route not found' });
 });
-const PORT = process.env.SERVER_PORT ? parseInt(process.env.SERVER_PORT) : 10000;
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('❌ Server Error:', err.message);
+    res.status(500).json({
+        message: isProduction ? 'Internal server error' : err.message
+    });
+});
+// ========== START SERVER ==========
+const PORT = process.env.PORT || 10000;
 const server = app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📁 Uploads directory: ${uploadsDir}`);
-    console.log(`🔗 Test upload at: http://localhost:${PORT}/api/upload/test`);
-    console.log(`🔗 Check routes at: http://localhost:${PORT}/api/routes`);
-    console.log(`🖼️ Marketplace upload: http://localhost:${PORT}/api/marketplace/upload`);
+    if (!isProduction) {
+        console.log(`✅ Server running on port ${PORT}`);
+        console.log(`📁 Uploads directory: ${uploadsDir}`);
+    }
 });
 exports.default = app;
