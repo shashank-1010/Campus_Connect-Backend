@@ -9,10 +9,10 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const db_1 = __importDefault(require("./config/db"));
-const supabase_1 = require("./config/supabase"); // ✅ ADD THIS
+const supabase_1 = require("./config/supabase");
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 console.log('🔍 authRoutes stack length:', authRoutes_1.default.stack?.length);
-const marketplaceRoutes_1 = __importDefault(require("./routes/marketplaceRoutes")); // ✅ Updated
+const marketplaceRoutes_1 = __importDefault(require("./routes/marketplaceRoutes"));
 const notesRoutes_1 = __importDefault(require("./routes/notesRoutes"));
 const rideRoutes_1 = __importDefault(require("./routes/rideRoutes"));
 const studyGroupRoutes_1 = __importDefault(require("./routes/studyGroupRoutes"));
@@ -26,12 +26,12 @@ const lostItemRoutes_1 = __importDefault(require("./routes/lostItemRoutes"));
 const complaintRoutes_1 = __importDefault(require("./routes/complaintRoutes"));
 const skillRoutes_1 = __importDefault(require("./routes/skillRoutes"));
 // Load env from server folder
-dotenv_1.default.config({ path: path_1.default.join(__dirname, '.env') }); // ✅ CHANGE: ab server folder mein .env
+dotenv_1.default.config({ path: path_1.default.join(__dirname, '.env') });
 const app = (0, express_1.default)();
 // Connect to database
 (0, db_1.default)();
 // Test Supabase connection
-(0, supabase_1.testSupabaseConnection)(); // ✅ ADD THIS
+(0, supabase_1.testSupabaseConnection)();
 // Create uploads directory (local backup)
 const uploadsDir = path_1.default.resolve(__dirname, '../uploads');
 console.log('📁 Uploads directory path:', uploadsDir);
@@ -43,7 +43,6 @@ try {
     else {
         console.log('✅ Uploads directory already exists');
     }
-    // Test write permission
     const testFile = path_1.default.join(uploadsDir, 'test.txt');
     fs_1.default.writeFileSync(testFile, 'test');
     fs_1.default.unlinkSync(testFile);
@@ -52,10 +51,17 @@ try {
 catch (error) {
     console.error('❌ Error with uploads directory:', error);
 }
-// Middleware
+// ========== ✅ CORS FIX – FRONTEND DOMAINS ALLOW ==========
 app.use((0, cors_1.default)({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    credentials: true
+    origin: [
+        'https://frontend-knha.onrender.com',
+        'https://faahhh.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:5173'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
@@ -68,12 +74,11 @@ app.use((req, res, next) => {
 });
 // API Routes
 console.log('📝 Registering routes...');
-app.use('/api/auth', authRoutes_1.default);
 app.use('/api/complaints', complaintRoutes_1.default);
 app.use('/api/chat', chatRoutes_1.default);
 app.use('/api/auth', authRoutes_1.default);
 app.use('/api/lost-items', lostItemRoutes_1.default);
-app.use('/api/marketplace', marketplaceRoutes_1.default); // ✅ Updated marketplace routes
+app.use('/api/marketplace', marketplaceRoutes_1.default);
 app.use('/api/notes', notesRoutes_1.default);
 app.use('/api/rides', rideRoutes_1.default);
 app.use('/api/studygroups', studyGroupRoutes_1.default);
@@ -84,7 +89,7 @@ app.use('/api/admin', adminRoutes_1.default);
 app.use('/api/profile', profileRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
 console.log('✅ Routes registered');
-// ✅ ROOT ROUTE - Yeh hona chahiye
+// ROOT ROUTE
 app.get('/', (req, res) => {
     res.json({
         message: '🚀 Campus Connect API Server',
