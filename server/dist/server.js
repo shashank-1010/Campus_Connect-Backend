@@ -54,6 +54,7 @@ catch (error) {
 // ========== ✅ CORS FIX – FRONTEND DOMAINS ALLOW ==========
 app.use((0, cors_1.default)({
     origin: [
+        'https://campusconnectup.onrender.com',
         'https://frontend-knha.onrender.com',
         'https://faahhh.vercel.app',
         'http://localhost:3000',
