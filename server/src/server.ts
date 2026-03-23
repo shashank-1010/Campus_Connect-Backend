@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
+// import rateLimit from 'express-rate-limit'; // REMOVED - Rate limiting feature removed
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -46,15 +46,15 @@ app.use(helmet({
 // Compression - Response compression
 app.use(compression());
 
-// Rate limiting - Prevent DDoS
-const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api', limiter);
+// Rate limiting - REMOVED (No longer active)
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // Limit each IP to 100 requests per windowMs
+//   message: 'Too many requests from this IP, please try again later.',
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use('/api', limiter); // REMOVED - Rate limiting feature removed
 
 // CORS - Restrict origins
 app.use(cors({
