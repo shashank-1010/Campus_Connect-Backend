@@ -47,7 +47,7 @@ app.use((0, helmet_1.default)({
 app.use((0, compression_1.default)());
 // Rate limiting - Prevent DDoS
 const limiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: 10 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests per windowMs
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
