@@ -7,7 +7,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
-const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+// import rateLimit from 'express-rate-limit'; // REMOVED - Rate limiting feature removed
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
@@ -45,15 +45,15 @@ app.use((0, helmet_1.default)({
 }));
 // Compression - Response compression
 app.use((0, compression_1.default)());
-// Rate limiting - Prevent DDoS
-const limiter = (0, express_rate_limit_1.default)({
-    windowMs: 10 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-app.use('/api', limiter);
+// Rate limiting - REMOVED (No longer active)
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // Limit each IP to 100 requests per windowMs
+//   message: 'Too many requests from this IP, please try again later.',
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use('/api', limiter); // REMOVED - Rate limiting feature removed
 // CORS - Restrict origins
 app.use((0, cors_1.default)({
     origin: [
