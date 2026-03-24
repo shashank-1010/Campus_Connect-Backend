@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAllPolls = exports.deleteComment = exports.deleteAllComments = exports.deletePoll = exports.addComment = exports.votePoll = exports.createPoll = exports.getPolls = void 0;
 const Poll_1 = __importDefault(require("../models/Poll"));
+const mongoose_1 = __importDefault(require("mongoose"));
 // @desc    Get all polls
 // @route   GET /api/polls
 const getPolls = async (req, res) => {
@@ -40,38 +41,75 @@ const createPoll = async (req, res) => {
     }
 };
 exports.createPoll = createPoll;
-// @desc    Vote on a poll
+// @desc    Vote on a poll (Allows vote change)
 // @route   POST /api/polls/:id/vote
 const votePoll = async (req, res) => {
     try {
         const { optionId } = req.body;
+        const userId = req.userId; // ✅ Type assertion - red line fix
+        if (!userId) {
+            res.status(401).json({ message: 'User not authenticated' });
+            return;
+        }
         const poll = await Poll_1.default.findById(req.params.id);
         if (!poll) {
             res.status(404).json({ message: 'Poll not found' });
             return;
         }
-        // Check if user already voted
-        if (poll.votedUsers && poll.votedUsers.includes(req.userId)) {
-            res.status(400).json({ message: 'You have already voted in this poll' });
-            return;
+        // Check if user already voted in this poll
+        const hasVoted = poll.votedUsers && poll.votedUsers.some((id) => id.toString() === userId.toString());
+        if (hasVoted) {
+            // USER ALREADY VOTED - Remove previous vote
+            let previousVoteOption = null;
+            // Find which option user previously voted for
+            for (let opt of poll.options) {
+                if (opt.voters && opt.voters.some((id) => id.toString() === userId.toString())) {
+                    previousVoteOption = opt;
+                    break;
+                }
+            }
+            // Remove previous vote
+            if (previousVoteOption) {
+                previousVoteOption.votes -= 1;
+                previousVoteOption.voters = previousVoteOption.voters.filter((id) => id.toString() !== userId.toString());
+            }
+            // Add new vote
+            const selectedOption = poll.options.find((opt) => opt._id?.toString() === optionId);
+            if (!selectedOption) {
+                res.status(404).json({ message: 'Option not found' });
+                return;
+            }
+            selectedOption.votes += 1;
+            if (!selectedOption.voters) {
+                selectedOption.voters = [];
+            }
+            selectedOption.voters.push(new mongoose_1.default.Types.ObjectId(userId)); // ✅ Convert to ObjectId
+            await poll.save();
+            res.json({ message: 'Vote changed successfully', poll });
         }
-        // Find the option - FIXED: using find instead of id()
-        const option = poll.options.find((opt) => opt._id?.toString() === optionId);
-        if (!option) {
-            res.status(404).json({ message: 'Option not found' });
-            return;
+        else {
+            // FIRST TIME VOTING - Add new vote
+            const selectedOption = poll.options.find((opt) => opt._id?.toString() === optionId);
+            if (!selectedOption) {
+                res.status(404).json({ message: 'Option not found' });
+                return;
+            }
+            selectedOption.votes += 1;
+            if (!selectedOption.voters) {
+                selectedOption.voters = [];
+            }
+            selectedOption.voters.push(new mongoose_1.default.Types.ObjectId(userId)); // ✅ Convert to ObjectId
+            // Add user to poll's votedUsers list
+            if (!poll.votedUsers) {
+                poll.votedUsers = [];
+            }
+            poll.votedUsers.push(new mongoose_1.default.Types.ObjectId(userId)); // ✅ Convert to ObjectId
+            await poll.save();
+            res.json({ message: 'Vote recorded successfully', poll });
         }
-        // Add vote
-        option.votes += 1;
-        // Add user to votedUsers - FIXED: type assertion
-        if (!poll.votedUsers) {
-            poll.votedUsers = [];
-        }
-        poll.votedUsers.push(req.userId);
-        await poll.save();
-        res.json({ message: 'Vote recorded', poll });
     }
     catch (error) {
+        console.error('Vote error:', error);
         res.status(500).json({ message: 'Server error', error });
     }
 };
@@ -81,18 +119,22 @@ exports.votePoll = votePoll;
 const addComment = async (req, res) => {
     try {
         const { comment } = req.body;
+        const userId = req.userId; // ✅ Type assertion
+        if (!userId) {
+            res.status(401).json({ message: 'User not authenticated' });
+            return;
+        }
         const poll = await Poll_1.default.findById(req.params.id);
         if (!poll) {
             res.status(404).json({ message: 'Poll not found' });
             return;
         }
-        // FIXED: ensure comments array exists
         if (!poll.comments) {
             poll.comments = [];
         }
         poll.comments.push({
             comment,
-            userId: req.userId,
+            userId: new mongoose_1.default.Types.ObjectId(userId), // ✅ Convert to ObjectId
             createdAt: new Date()
         });
         await poll.save();
@@ -147,7 +189,6 @@ const deleteComment = async (req, res) => {
             res.status(404).json({ message: 'Poll not found' });
             return;
         }
-        // FIXED: proper type handling for comment deletion
         if (poll.comments && Array.isArray(poll.comments)) {
             poll.comments = poll.comments.filter((c) => c._id?.toString() !== req.params.commentId);
         }
