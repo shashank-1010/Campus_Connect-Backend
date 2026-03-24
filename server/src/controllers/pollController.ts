@@ -39,44 +39,82 @@ export const createPoll = async (req: AuthRequest, res: Response): Promise<void>
   }
 };
 
-// @desc    Vote on a poll
+// @desc    Vote on a poll (Allows vote change)
 // @route   POST /api/polls/:id/vote
 export const votePoll = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { optionId } = req.body;
+    const userId = req.userId as string;
+    
+    if (!userId) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+    
     const poll = await Poll.findById(req.params.id);
-
     if (!poll) {
       res.status(404).json({ message: 'Poll not found' });
       return;
     }
 
-    // Check if user already voted
-    if (poll.votedUsers && poll.votedUsers.includes(req.userId as any)) {
-      res.status(400).json({ message: 'You have already voted in this poll' });
-      return;
+    // Find which option user previously voted for
+    let previousVoteOptionIndex = -1;
+    let previousVoteOption: any = null;
+    
+    for (let i = 0; i < poll.options.length; i++) {
+      const opt = poll.options[i];
+      if (opt.voters && opt.voters.some((id: any) => id.toString() === userId.toString())) {
+        previousVoteOptionIndex = i;
+        previousVoteOption = opt;
+        break;
+      }
     }
-
-    // Find the option - FIXED: using find instead of id()
-    const option = poll.options.find((opt: any) => opt._id?.toString() === optionId);
-    if (!option) {
+    
+    // Find selected option
+    const selectedOptionIndex = poll.options.findIndex((opt: any) => opt._id?.toString() === optionId);
+    if (selectedOptionIndex === -1) {
       res.status(404).json({ message: 'Option not found' });
       return;
     }
-
-    // Add vote
-    option.votes += 1;
     
-    // Add user to votedUsers - FIXED: type assertion
+    const selectedOption = poll.options[selectedOptionIndex];
+    
+    // If user already voted for this same option
+    if (previousVoteOptionIndex === selectedOptionIndex) {
+      res.status(400).json({ message: 'You have already voted for this option' });
+      return;
+    }
+    
+    // Remove previous vote if exists
+    if (previousVoteOption) {
+      previousVoteOption.votes -= 1;
+      previousVoteOption.voters = previousVoteOption.voters.filter(
+        (id: any) => id.toString() !== userId.toString()
+      );
+    }
+    
+    // Add new vote
+    selectedOption.votes += 1;
+    if (!selectedOption.voters) {
+      selectedOption.voters = [];
+    }
+    selectedOption.voters.push(new mongoose.Types.ObjectId(userId));
+    
+    // Update poll's votedUsers list (ensure user is marked as voted)
     if (!poll.votedUsers) {
       poll.votedUsers = [];
     }
-    poll.votedUsers.push(req.userId as any);
+    if (!poll.votedUsers.some((id: any) => id.toString() === userId.toString())) {
+      poll.votedUsers.push(new mongoose.Types.ObjectId(userId));
+    }
     
     await poll.save();
-
-    res.json({ message: 'Vote recorded', poll });
+    
+    const message = previousVoteOption ? 'Vote changed successfully!' : 'Vote recorded successfully!';
+    res.json({ message, poll });
+    
   } catch (error) {
+    console.error('Vote error:', error);
     res.status(500).json({ message: 'Server error', error });
   }
 };
@@ -86,6 +124,13 @@ export const votePoll = async (req: AuthRequest, res: Response): Promise<void> =
 export const addComment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { comment } = req.body;
+    const userId = req.userId as string;
+    
+    if (!userId) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+    
     const poll = await Poll.findById(req.params.id);
 
     if (!poll) {
@@ -93,16 +138,15 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    // FIXED: ensure comments array exists
     if (!poll.comments) {
       poll.comments = [];
     }
 
     poll.comments.push({
       comment,
-      userId: req.userId as any,
+      userId: new mongoose.Types.ObjectId(userId),
       createdAt: new Date()
-    } as any);
+    });
 
     await poll.save();
     res.json({ message: 'Comment added', poll });
@@ -156,7 +200,6 @@ export const deleteComment = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // FIXED: proper type handling for comment deletion
     if (poll.comments && Array.isArray(poll.comments)) {
       poll.comments = poll.comments.filter(
         (c: any) => c._id?.toString() !== req.params.commentId
