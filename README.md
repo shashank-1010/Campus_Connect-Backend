@@ -23,7 +23,3 @@ npm run dev
 
 - Server runs on http://localhost:5000
 - Client runs on http://localhost:3000
-
-## Admin Login
-- Email: shashankadmin@gmail.com
-- Password: shashan8115067311admin
